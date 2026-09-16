@@ -1,0 +1,2746 @@
+getwd()
+
+# Voir comment sont codés les noms de colonnes 
+
+library(readr)
+
+guess_encoding("data/Cancer_clean.csv")
+
+
+# Conversion du fichier latin en UTF-8 (ce qui est préférable pour GitHub, Quarto, R Markdown)
+
+Cancer <- read_delim(
+  "data/Cancer_clean.csv",
+  delim = ";",
+  locale = locale(encoding = "ISO-8859-1"),
+  show_col_types = FALSE
+)
+
+problems(Cancer)
+
+
+# Importation
+
+library(dplyr)
+
+Cancer <- read.csv2(
+  "data/Cancer_clean_utf8.csv",
+  header = TRUE,
+  fill = TRUE,
+  check.names = FALSE
+)
+
+dim(Cancer)
+
+names(Cancer)[1:20]
+
+
+
+for(i in seq_along(names(Cancer))){      # Voir les noms des colonnes qui sont encore mal codé
+  cat(i, "\n")
+  print(names(Cancer)[i])
+}
+
+which(
+  grepl("\\\\x", names(Cancer))          # Vérifier les noms problématiques    
+)
+
+
+# normaliser tous les noms en ASCII(jeu de caractères sans accents)
+
+library(janitor)
+
+names(Cancer) <- iconv(
+  names(Cancer),
+  from = "latin1",
+  to = "ASCII//TRANSLIT",
+  sub = ""
+)
+
+Cancer <- clean_names(Cancer)
+
+glimpse(Cancer)
+
+
+# Pour repérer les colonnes texte encore mal encodées :
+
+char_cols <- names(Cancer)[sapply(Cancer, is.character)]
+
+char_cols
+
+lapply(
+  Cancer[char_cols],
+  function(x) head(unique(x))
+)
+
+# Nettoyage de la base au complet
+
+Cancer <- Cancer |>
+  mutate(
+    across(
+      where(is.character),
+      ~ iconv(.x,
+              from = "latin1",
+              to = "UTF-8")
+    )
+  )
+
+unique(Cancer$statut_matrimonial)
+
+# Contrôle global de l'encodage
+
+char_cols <- names(Cancer)[sapply(Cancer, is.character)]
+
+sum(grepl("\\\\x",unlist(Cancer[char_cols])))
+
+
+# Sauvegarder une version propre
+
+write.csv(Cancer,"data/Cancer_ready.csv",row.names = FALSE,fileEncoding = "UTF-8")
+
+names(Cancer)
+
+
+# RENOMER LES VARIABLES
+
+library(openxlsx)
+
+# Créer un data frame avec les noms des variables
+variable_names <- data.frame(
+  french_variable = names(Cancer)
+)
+
+# Export Excel
+write.xlsx(
+  variable_names,
+  file = "output/Variable_Names_French.xlsx",
+  rowNames = FALSE
+)
+
+
+
+
+# Codebook V2.0 Template : DICTIONNAIRE
+
+
+# Packages
+library(readxl)
+library(openxlsx)
+library(dplyr)
+library(stringr)
+
+
+# 1. Import list of variables
+
+
+dictionary <- read_excel(
+  "output/Variable_Names_French.xlsx"
+)
+
+
+# 2. Create Codebook columns
+
+
+dictionary <- dictionary %>%
+  
+  mutate(
+    
+    # English variable name
+    english_variable = "",
+    
+    # Variable label for manuscript
+    manuscript_label =
+      str_to_sentence(
+        str_replace_all(
+          french_variable,
+          "_",
+          " "
+        )
+      ),
+    
+    # KAP domain
+    kap_domain = case_when(
+      
+      french_variable %in% c(
+        "age",
+        "sexe",
+        "province",
+        "statut_matrimonial",
+        "duree_stage",
+        "university"
+      ) ~ "Sociodemographic",
+      
+      str_detect(
+        french_variable,
+        "antecedent|relation_avec|observe|evolution"
+      ) ~ "Experience",
+      
+      str_detect(
+        french_variable,
+        "perception|pense_|pensez_vous|priorite|mythes"
+      ) ~ "Perception",
+      
+      str_detect(
+        french_variable,
+        "precision|raison|proposee|poposition"
+      ) ~ "Open-ended",
+      
+      TRUE ~ "Knowledge"
+    ),
+    
+    # Variable type
+    variable_type = case_when(
+      
+      french_variable == "age"
+      ~ "Continuous",
+      
+      str_detect(
+        french_variable,
+        "precision|raison|proposee|poposition"
+      )
+      ~ "Text",
+      
+      TRUE
+      ~ "Categorical"
+    ),
+    
+    # To complete manually
+    categories = "",
+    
+    correct_answer = "",
+    
+    scoring_rule = "",
+    
+    include_in_knowledge_score = "",
+    
+    include_in_perception_score = ""
+  )
+
+
+# 3. Export Codebook V2.0
+
+write.xlsx(
+  
+  dictionary,
+  
+  file =
+    "output/Codebook_V2_Draft.xlsx",
+  
+  rowNames = FALSE
+)
+
+# 4. Quick summary
+
+
+table(dictionary$kap_domain)
+
+
+
+
+# Complete codebook
+
+dictionary <- dictionary %>%
+  
+  mutate(
+    
+    
+    # English variable names
+    
+    
+    english_variable = french_variable,
+    
+    english_variable = str_replace_all(
+      english_variable,
+      c(
+        
+        "age" = "age",
+        
+        "sexe" = "sex",
+        
+        "province" = "province",
+        
+        "statut_matrimonial" = "marital_status",
+        
+        "duree_stage" = "internship_duration",
+        
+        "avoir_deja_entendu_cancer" =
+          "ever_heard_about_cancer",
+        
+        "source_information" =
+          "source_of_information",
+        
+        "formation_medicale" =
+          "medical_training",
+        
+        "famille_amis" =
+          "family_friends",
+        
+        "litterature_scientifique_livres" =
+          "scientific_literature",
+        
+        "experience_clinique_durant_mon_stages" =
+          "clinical_experience",
+        
+        "caracteristic" =
+          "definition",
+        
+        "type_de_cancer_connu" =
+          "known_cancer_types",
+        
+        "principaux_facteurs_de_risque" =
+          "risk_factors",
+        
+        "tabagiste" =
+          "smoking",
+        
+        "consomation_d_alocool" =
+          "alcohol_consumption",
+        
+        "mauvaise_alimentation" =
+          "unhealthy_diet",
+        
+        "manque_d_exercice_physique" =
+          "physical_inactivity",
+        
+        "infections" =
+          "infections",
+        
+        "genetique_hereditaire" =
+          "genetic_hereditary",
+        
+        "vieillissement" =
+          "aging",
+        
+        "mythes_culturels_sorcellerie" =
+          "witchcraft_myths",
+        
+        "le_cancer" =
+          "cancer",
+        
+        "detection_precoce" =
+          "early_detection",
+        
+        "vaccination" =
+          "vaccination",
+        
+        "depistage" =
+          "screening",
+        
+        "arret_du_tabac" =
+          "smoking_cessation",
+        
+        "modalites_therapeutiques" =
+          "treatment_modalities",
+        
+        "chirurgie" =
+          "surgery",
+        
+        "chimiotherapie" =
+          "chemotherapy",
+        
+        "immunotherapie" =
+          "immunotherapy",
+        
+        "therapie_cible" =
+          "targeted_therapy",
+        
+        "radiotherapie" =
+          "radiotherapy",
+        
+        "traitement_paliatif" =
+          "palliative_care",
+        
+        "traitement_traditionnel" =
+          "traditional_treatment",
+        
+        "role_principal_des_soins_palliatifs" =
+          "main_role_of_palliative_care",
+        
+        "antecedent_personnel_de_cancer" =
+          "personal_history_of_cancer",
+        
+        "antecedent_familial_de_cancer" =
+          "family_history_of_cancer",
+        
+        "relation_avec_la_personne_atteinte" =
+          "relationship_with_affected_person",
+        
+        "mode_de_traitement_observe_ou_vecu" =
+          "observed_treatment",
+        
+        "evolution_observee" =
+          "observed_outcome",
+        
+        "perception" =
+          "perception"
+      )
+    ),
+    
+    
+    # Manuscript label
+    
+    
+    manuscript_label =
+      
+      english_variable %>%
+      
+      str_replace_all("_", " ") %>%
+      
+      str_to_sentence(),
+    
+    
+    # KAP DOMAIN
+    
+    
+    kap_domain = case_when(
+      
+      french_variable %in% c(
+        "age",
+        "sexe",
+        "province",
+        "statut_matrimonial",
+        "duree_stage",
+        "university"
+      )
+      
+      ~ "Sociodemographic",
+      
+      str_detect(
+        french_variable,
+        "antecedent|relation_avec|observe|evolution"
+      )
+      
+      ~ "Experience",
+      
+      str_detect(
+        french_variable,
+        "perception|pense_|pensez_vous|priorite|mythes"
+      )
+      
+      ~ "Perception",
+      
+      str_detect(
+        french_variable,
+        "precision|raison|proposee|poposition"
+      )
+      
+      ~ "Open-ended",
+      
+      TRUE
+      
+      ~ "Knowledge"
+    ),
+    
+    
+    # Variable type
+    
+    
+    variable_type = case_when(
+      
+      french_variable == "age"
+      ~ "Continuous",
+      
+      str_detect(
+        french_variable,
+        "precision|raison|proposee|poposition"
+      )
+      ~ "Text",
+      
+      TRUE
+      ~ "Binary/Categorical"
+    ),
+    
+    
+    # Scoring rule
+    
+    
+    scoring_rule = case_when(
+      
+      kap_domain == "Knowledge"
+      ~ "1=Correct ; 0=Incorrect",
+      
+      kap_domain == "Perception"
+      ~ "Positive=1 ; Negative=0",
+      
+      TRUE
+      ~ "NA"
+    ),
+    
+
+    # Knowledge score inclusion
+    
+    
+    include_in_knowledge_score = case_when(
+      
+      kap_domain == "Knowledge"
+      ~ "YES",
+      
+      TRUE
+      ~ "NO"
+    ),
+    
+    
+    # Perception score inclusion
+    
+    
+    include_in_perception_score = case_when(
+      
+      kap_domain == "Perception"
+      ~ "YES",
+      
+      TRUE
+      ~ "NO"
+    )
+  )
+
+
+
+
+# FILL CATEGORIES COLUMN IN CODEBOOK
+
+
+dictionary <- dictionary %>%
+  mutate(
+    
+    correct_answer = case_when(
+      
+      
+      # Types de cancer connus
+      
+      
+      str_detect(
+        french_variable,
+        "^type_de_cancer_connu_"
+      ) ~ "1",
+      
+      
+      # Définition du cancer
+      
+      
+      french_variable ==
+        "caracteristic_cancer_une_proliferation_incontrolee_de_cellules_anormales"
+      ~ "1",
+      
+      french_variable %in% c(
+        "caracteristic_cancer_une_infection_aigue",
+        "caracteristic_cancer_une_inflammation_passagere",
+        "caracteristic_cancer_une_reaction_allergique"
+      )
+      ~ "0",
+      
+      
+      # Facteurs de risque
+      
+      
+      str_detect(
+        french_variable,
+        "^principaux_facteurs_de_risque_"
+      ) ~ "1",
+      
+      
+      # Prévention / dépistage
+      
+      
+      str_detect(
+        french_variable,
+        "^les_moyens_de_prevention_ou_de_depistage_du_cancer_"
+      ) ~ "1",
+      
+      
+      # Modalités thérapeutiques
+      
+      
+      str_detect(
+        french_variable,
+        "^modalites_therapeutiques_"
+      ) ~ "1",
+      
+      
+      # Questions Vrai/Faux
+      
+      
+      french_variable ==
+        "le_cancer_touche_uniquement_les_personnes_agees"
+      ~ "Faux_",
+      
+      french_variable ==
+        "la_detection_precoce_ameliore_les_resultats_du_traitement"
+      ~ "VRAI",
+      
+      french_variable ==
+        "le_tabagisme_est_la_cause_la_plus_frequente_du_cancer"
+      ~ "VRAI",
+      
+      french_variable ==
+        "certaines_vaccination_peuvent_prevenir_certains_cancers"
+      ~ "VRAI",
+      
+      french_variable ==
+        "utilisation_d_ecrans_solaires_reduit_le_cancer_de_la_peau"
+      ~ "VRAI",
+      
+      french_variable ==
+        "le_cancer_est_toujours_hereditaire"
+      ~ "Faux_",
+      
+      french_variable ==
+        "le_cancer_du_sein_peut_toucher_les_hommes"
+      ~ "VRAI",
+      
+      french_variable ==
+        "hpylori_peut_conduire_au_cancer_gastrique"
+      ~ "VRAI",
+      
+      TRUE ~ NA_character_
+    )
+  )
+
+
+# Pour les reponses correctes négatives
+
+dictionary$correct_answer[
+  dictionary$french_variable %in% c(
+    
+    "type_de_cancer_connu_aucun",
+    
+    "principaux_facteurs_de_risque_aucun",
+    
+    "principaux_facteurs_de_risque_je_ne_sais_pas",
+    
+    "principaux_facteurs_de_risque_mythes_culturels_sorcellerie",
+    
+    "les_moyens_de_prevention_ou_de_depistage_du_cancer_aucun",
+    
+    "modalites_therapeutiques_traitement_traditionnel",
+    
+    "modalites_therapeutiques_je_ne_sais_pas"
+    
+  )
+] <- "0"
+
+
+
+
+# Positive perception response
+
+
+dictionary <- dictionary %>%
+  
+  mutate(
+    
+    positive_response = case_when(
+      
+      # Cancer can be cured
+      french_variable ==
+        "pense_que_le_cancer_peut_etre_gueri"
+      ~ "Oui",
+      
+      # Cancer is a major public health problem
+      french_variable ==
+        "pensez_vous_que_le_cancer_est_un_probleme_majeur_de_sante_publique_dans_la_sous_region_du_kivu"
+      ~ "Oui",
+      
+      # Cancer control should be a priority
+      french_variable ==
+        "niveau_de_priorite_accordee_a_la_lutte_contre_le_cancer_en_rdc"
+      ~ "Elevee",
+      
+      # Myths influence cancer management
+      french_variable ==
+        "influence_des_mythes_et_traditions_sur_la_gestion_du_cancer"
+      ~ "Oui",
+      
+      # General perception of cancer
+      french_variable ==
+        "votre_perception_generale_du_cancer"
+      ~ "Positive",
+      
+      TRUE
+      ~ ""
+    )
+  )
+
+
+
+
+# Quick check
+
+
+dictionary %>%
+  
+  select(
+    french_variable,
+    categories,
+    n_categories
+  ) %>%
+  
+  View()
+
+
+# Export updated codebook
+
+
+openxlsx::write.xlsx(
+  
+  dictionary,
+  
+  file =
+    "output/Codebook_V2_With_Categories.xlsx",
+  
+  rowNames = FALSE
+)
+
+
+# VERIFICATION DU CODEBOOK
+library(readxl)
+cd <- read_excel("output/Codebook_V2_correct_Analyse.xlsx")
+
+#structure du codebook
+
+glimpse(cd)
+names(cd)
+# Repartition des Variables par domaines KAP
+table(cd$kap_domain)
+
+# Nombre de variables incluses dans le score de connaissance
+
+cd %>% count(include_in_knowledge_score)
+
+# Nombre de variables incluses dans le score de perception.
+cd %>% count(include_in_perception_score)
+
+
+
+# SCORE MAXIMAL
+
+sum(cd$include_in_knowledge_score == "YES")
+sum(cd$include_in_perception_score == "YES")
+
+# SAUVEGARDER LA COPIE DEFINITIVE DU CODEBOOK
+
+library(openxlsx)
+
+write.xlsx(
+  cd,
+  "output/Codebook_V2_FINAL_LOCKED.xlsx",
+  overwrite = FALSE
+)
+
+
+
+# KNOWLEDGE & PERCEPTION SCORES
+
+
+library(dplyr)
+library(readxl)
+library(stringr)
+
+
+# Import Codebook
+
+
+cd <- read_excel(
+  "output/Codebook_V2_correct_Analyse.xlsx"
+)
+
+
+# Knowledge variables
+
+
+knowledge_items <- cd %>%
+  
+  filter(
+    include_in_knowledge_score == "YES"
+  )
+
+
+# Create binary score for each knowledge item
+
+
+for(i in 1:nrow(knowledge_items)){
+  
+  var <- knowledge_items$french_variable[i]
+  
+  answer <- knowledge_items$correct_answer[i]
+  
+  score_var <- paste0(
+    var,
+    "_score"
+  )
+  
+  Cancer[[score_var]] <-
+    
+   
+  ifelse(
+    
+    is.na(Cancer[[var]]),
+    
+    NA,
+    
+    ifelse(
+      as.character(
+        Cancer[[var]]
+      ) == answer,
+      1,
+      0
+    )
+  )
+ 
+  
+}
+
+
+# Total Knowledge Score
+
+
+knowledge_score_vars <-
+  
+  paste0(
+    knowledge_items$french_variable,
+    "_score"
+  )
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+   
+    knowledge_score =
+      
+      rowSums(
+        
+        select(
+          .,
+          all_of(
+            knowledge_score_vars
+          )
+        ),
+        
+        na.rm = TRUE
+      )
+  
+    
+  )
+
+
+# Knowledge Percentage
+
+
+max_knowledge_score <-
+  
+  nrow(
+    knowledge_items
+  )
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    
+    knowledge_percentage =
+      
+      knowledge_score /
+      max_knowledge_score *
+      100
+    
+    
+  )
+
+
+# Knowledge Level
+
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    
+    knowledge_level = case_when(
+      
+      knowledge_percentage < 50
+      ~ "Poor knowledge",
+      
+      knowledge_percentage < 65
+      ~ "Insufficient knowledge",
+      
+      knowledge_percentage < 85
+      ~ "Moderate knowledge",
+      
+      TRUE
+      ~ "Good knowledge"
+    )
+    
+    
+  )
+
+
+# PERCEPTION SCORE
+
+
+perception_items <- cd %>%
+  
+  filter(
+    include_in_perception_score == "YES"
+  )
+
+
+# Positive perception items
+
+
+for(i in 1:nrow(perception_items)){
+  
+  var <- perception_items$french_variable[i]
+  
+  positive <- perception_items$positive_response[i]
+  
+  score_var <- paste0(
+    var,
+    "_score"
+  )
+  
+  Cancer[[score_var]] <-
+    
+   
+  ifelse(
+    
+    is.na(Cancer[[var]]),
+    
+    NA,
+    
+    ifelse(
+      
+      as.character(
+        Cancer[[var]]
+      ) == positive,
+      
+      1,
+      
+      0
+    )
+  )
+  
+  
+}
+
+
+# Total Perception Score
+
+
+perception_score_vars <-
+  
+  paste0(
+    perception_items$french_variable,
+    "_score"
+  )
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    
+    perception_score =
+      
+      rowSums(
+        
+        select(
+          .,
+          all_of(
+            perception_score_vars
+          )
+        ),
+        
+        na.rm = TRUE
+      )
+   
+    
+  )
+
+
+# Perception Percentage
+
+
+max_perception_score <-
+  
+  nrow(
+    perception_items
+  )
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    
+    perception_percentage =
+      
+      perception_score /
+      max_perception_score *
+      100
+    
+    
+  )
+
+
+# Perception Level
+
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    
+    perception_level = case_when(
+      
+      perception_percentage < 50
+      ~ "Negative perception",
+      
+      perception_percentage < 65
+      ~ "Insufficient perception",
+      
+      perception_percentage < 85
+      ~ "Moderate perception",
+      
+      TRUE
+      ~ "Positive perception"
+    )
+    
+    
+  )
+
+
+# Quick Checks
+
+
+table(
+  Cancer$knowledge_level
+)
+
+table(
+  Cancer$perception_level
+)
+
+summary(
+  Cancer$knowledge_score
+)
+
+summary(
+  Cancer$perception_score
+)
+
+# VERIFICATION PERCEPTION
+
+cd %>%
+  filter(
+    include_in_perception_score == "YES"
+  ) %>%
+  select(
+    french_variable,
+    positive_response
+  )
+
+# Working copy of the codebook
+
+cd_work <- cd
+
+cd_work <- cd_work %>%
+  
+  mutate(
+    
+    positive_response = case_when(
+      
+      french_variable ==
+        "pense_que_le_cancer_peut_etre_gueri"
+      ~ "VRAI",
+      
+      french_variable ==
+        "pensez_vous_que_la_prevention_le_diagnostic_et_la_prise_en_charge_du_cancer_sont_adequates_en_rdc"
+      ~ "Non",
+      
+      french_variable ==
+        "niveau_de_priorite_accordee_a_la_lutte_contre_le_cancer_en_rdc"
+      ~ "5",
+      
+      french_variable ==
+        "pensez_vous_que_le_cancer_est_un_probleme_majeur_de_sante_publique_dans_la_sous_region_du_kivu"
+      ~ "VRAI",
+      
+      french_variable ==
+        "influence_des_mythes_et_traditions_sur_la_gestion_du_cancer"
+      ~ "Oui_,_beaucoup;Oui_,_moderement_",
+      
+      TRUE
+      ~ positive_response
+    )
+  )
+
+# Vérification
+
+cd_work %>%
+  
+  filter(
+    include_in_perception_score == "YES"
+  ) %>%
+  
+  select(
+    french_variable,
+    positive_response
+  )
+
+# Sauvegarde separée
+
+openxlsx::write.xlsx(
+  
+  cd_work,
+  
+  "output/Codebook_V2_correct_Analyse_PerceptionFixed.xlsx",
+  
+  overwrite = TRUE
+)
+
+# PERCEPTION SCORE
+
+library(dplyr)
+library(stringr)
+
+# Perception variables from codebook
+
+perception_items <- cd_work %>%
+  
+  filter(
+    include_in_perception_score == "YES"
+  ) %>%
+  
+  select(
+    french_variable,
+    positive_response
+  )
+
+# Check
+
+glimpse(perception_items)
+
+# Create binary score for each perception item
+
+for(i in seq_len(nrow(perception_items))){
+  
+  var <- perception_items$french_variable[i]
+  
+  positive <- perception_items$positive_response[i]
+  
+  score_var <- paste0(
+    var,
+    "_score"
+  )
+  
+  # Split multiple positive responses
+  
+  positive_values <- strsplit(
+    positive,
+    ";"
+  )[[1]]
+  
+  positive_values <- trimws(
+    positive_values
+  )
+  
+  Cancer[[score_var]] <- ifelse(
+    
+    is.na(Cancer[[var]]) |
+      Cancer[[var]] == "",
+    
+    NA,
+    
+    ifelse(
+      
+      as.character(
+        Cancer[[var]]
+      ) %in% positive_values,
+      
+      1,
+      
+      0
+    )
+  )
+}
+
+# Names of perception score variables
+
+perception_score_vars <- paste0(
+  perception_items$french_variable,
+  "_score"
+)
+
+# Calculate total perception score
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    perception_score =
+      
+      rowSums(
+        
+        select(
+          .,
+          all_of(
+            perception_score_vars
+          )
+        ),
+        
+        na.rm = TRUE
+      )
+  )
+
+# Maximum possible perception score
+
+max_perception_score <- nrow(
+  perception_items
+)
+
+max_perception_score
+
+# Percentage score
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    perception_percentage =
+      
+      (
+        perception_score /
+          max_perception_score
+      ) * 100
+  )
+
+# Perception level classification
+
+Cancer <- Cancer %>%
+  
+  mutate(
+    
+    perception_level = case_when(
+      
+      perception_percentage < 50
+      ~ "Negative perception",
+      
+      
+      TRUE
+      ~ "Positive perception"
+    )
+  )
+
+# Quality checks
+
+cat(
+  "\nMaximum perception score = ",
+  max_perception_score,
+  "\n"
+)
+
+summary(
+  Cancer$perception_score
+)
+
+summary(
+  Cancer$perception_percentage
+)
+
+table(
+  Cancer$perception_level
+)
+
+# Item-by-item verification
+
+for(v in perception_score_vars){
+  
+  cat(
+    "\n============================\n"
+  )
+  
+  cat(v, "\n")
+  
+  print(
+    table(
+      Cancer[[v]],
+      useNA = "ifany"
+    )
+  )
+}
+
+
+
+
+
+# ANALYSE DESCRIPTIVE. TABLES 1–5 FOR MANUSCRIPT
+
+
+library(dplyr)
+library(gtsummary)
+library(flextable)
+library(officer)
+library(stringr)
+
+
+# Create Word document
+
+
+doc <- read_docx()
+
+
+# TABLE 1
+
+# Sociodemographic Characteristics
+
+
+vars_socio <- cd_work %>%
+  filter(
+    kap_domain == "Sociodemographic"
+  ) %>%
+  pull(french_variable)
+
+table1 <- Cancer %>%
+  select(all_of(vars_socio)) %>%
+  tbl_summary(
+    missing = "no",
+    statistic = list(
+      all_continuous() ~ "{mean} ± {sd}",
+      all_categorical() ~ "{n} ({p}%)"
+    )
+  ) %>%
+  bold_labels()
+
+doc <- body_add_par(
+  doc,
+  "Table 1. Sociodemographic Characteristics of Medical Interns (N = 262)",
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  doc,
+  as_flex_table(table1)
+)
+
+
+# TABLE 2
+
+# Knowledge Items
+
+
+knowledge_items <- cd_work %>%
+  filter(
+    include_in_knowledge_score == "YES"
+  )
+
+table2 <- knowledge_items
+
+table2$Correct_n <- sapply(
+  
+  table2$french_variable,
+  
+  function(x){
+    
+    
+    answer <- table2$correct_answer[
+      table2$french_variable == x
+    ][1]
+    
+    sum(
+      as.character(Cancer[[x]]) ==
+        as.character(answer),
+      na.rm = TRUE
+    )
+    
+    
+  }
+)
+
+table2$Correct_percent <- round(
+  100 * table2$Correct_n / nrow(Cancer),
+  1
+)
+
+table2 <- table2 %>%
+  
+  select(
+    manuscript_label,
+    Correct_n,
+    Correct_percent
+  ) %>%
+  
+  rename(
+    `Knowledge Item` = manuscript_label,
+    `Correct Responses (n)` = Correct_n,
+    `Correct Responses (%)` = Correct_percent
+  )
+
+doc <- body_add_par(
+  doc,
+  "Table 2. Cancer Knowledge Among Medical Interns",
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  doc,
+  flextable(table2)
+)
+
+
+
+# TABLE 2B
+# Performance by Knowledge Domain
+
+# Attribution des domaines de connaissance
+
+cd_work <- cd_work %>%
+  
+  mutate(
+    
+    knowledge_domain = case_when(
+      
+      # Awareness and information sources
+      str_detect(
+        french_variable,
+        "avoir_deja_entendu_cancer|source_information"
+      ) ~ "Cancer Awareness and Information Sources",
+      
+      # Definition of cancer
+      str_detect(
+        french_variable,
+        "caracteristic_cancer"
+      ) ~ "Definition of Cancer",
+      
+      # Cancer types
+      str_detect(
+        french_variable,
+        "type_de_cancer_connu|type_de_cancer_conn"
+      ) ~ "Cancer Types",
+      
+      # Risk factors
+      str_detect(
+        french_variable,
+        "facteurs_de_risque"
+      ) ~ "Risk Factors",
+      
+      # General cancer knowledge
+      str_detect(
+        french_variable,
+        "le_cancer|detection_precoce|hpylori|tabagisme_est_la_cause"
+      ) ~ "General Cancer Knowledge",
+      
+      # Prevention and screening
+      str_detect(
+        french_variable,
+        "moyens_de_prevention|vaccination|si_vrai_quand"
+      ) ~ "Prevention and Screening",
+      
+      # Treatment modalities
+      str_detect(
+        french_variable,
+        "modalites_therapeutiques"
+      ) ~ "Treatment Modalities",
+      
+      # Palliative care
+      str_detect(
+        french_variable,
+        "role_principal_des_soins_palliatifs"
+      ) ~ "Palliative Care",
+      
+      # Cancer burden and barriers
+      str_detect(
+        french_variable,
+        "principales_causes"
+      ) ~ "Cancer Burden and Barriers",
+      
+      TRUE ~ "Unclassified"
+    )
+  )
+
+# Variables incluses dans le score de connaissance
+
+knowledge_items_domain <- cd_work %>%
+  
+  filter(
+    include_in_knowledge_score == "YES"
+  )
+
+# Calcul du pourcentage de bonnes réponses par item
+
+knowledge_items_domain <- knowledge_items_domain %>%
+  
+  rowwise() %>%
+  
+  mutate(
+    
+    correct_percent =
+      
+      mean(
+        
+        as.character(
+          Cancer[[french_variable]]
+        ) == as.character(correct_answer),
+        
+        na.rm = TRUE
+        
+      ) * 100
+  ) %>%
+  
+  ungroup()
+
+# Résumé par domaine
+
+domain_summary <- knowledge_items_domain %>%
+  
+  group_by(
+    knowledge_domain
+  ) %>%
+  
+  summarise(
+    
+    `Number of Items` = n(),
+    
+    `Mean Correct (%)` =
+      round(
+        mean(correct_percent),
+        1
+      ),
+    
+    .groups = "drop"
+  ) %>%
+  
+  arrange(
+    knowledge_domain
+  ) %>%
+  
+  rename(
+    `Knowledge Domain` = knowledge_domain
+  )
+
+# Vérification
+
+sum(domain_summary$`Number of Items`)
+
+# Doit être égal à 74
+
+domain_summary
+
+# Export Word
+
+doc <- body_add_par(
+  doc,
+  "Table 2B. Performance by Knowledge Domain",
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  doc,
+  flextable(domain_summary) %>%
+    autofit()
+)
+
+# TABLE 3
+
+# Perception Items
+
+perception_items <- cd_work %>%
+  filter(
+    include_in_perception_score == "YES"
+  )
+
+table3 <- perception_items
+
+table3$Positive_n <- sapply(
+  
+  table3$french_variable,
+  
+  function(x){
+    
+    
+    sum(
+      Cancer[[paste0(x, "_score")]] == 1,
+      na.rm = TRUE
+    )
+    
+    
+  }
+)
+
+table3$Positive_percent <- round(
+  100 * table3$Positive_n / nrow(Cancer),
+  1
+)
+
+table3 <- table3 %>%
+  
+  select(
+    manuscript_label,
+    Positive_n,
+    Positive_percent
+  ) %>%
+  
+  rename(
+    `Perception Item` = manuscript_label,
+    `Positive Responses (n)` = Positive_n,
+    `Positive Responses (%)` = Positive_percent
+  )
+
+doc <- body_add_par(
+  doc,
+  "Table 3. Perceptions and Attitudes Toward Cancer",
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  doc,
+  flextable(table3)
+)
+
+
+# TABLE 4
+
+# Cancer-Related Experiences
+
+
+vars_experience <- cd_work %>%
+  filter(
+    kap_domain == "Experience"
+  ) %>%
+  pull(french_variable)
+
+table4 <- Cancer %>%
+  select(all_of(vars_experience)) %>%
+  tbl_summary(
+    missing = "no",
+    statistic =
+      all_categorical() ~ "{n} ({p}%)"
+  ) %>%
+  bold_labels()
+
+doc <- body_add_par(
+  doc,
+  "Table 4. Cancer-Related Experiences",
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  doc,
+  as_flex_table(table4)
+)
+
+
+# TABLE 5A
+
+# Score Summary
+
+
+table5a <- data.frame(
+  
+  Score = c(
+    "Knowledge Score",
+    "Knowledge Percentage",
+    "Perception Score",
+    "Perception Percentage"
+  ),
+  
+  Mean_SD = c(
+    
+    
+    paste0(
+      round(mean(Cancer$knowledge_score),2),
+      " ± ",
+      round(sd(Cancer$knowledge_score),2)
+    ),
+    
+    paste0(
+      round(mean(Cancer$knowledge_percentage),2),
+      " ± ",
+      round(sd(Cancer$knowledge_percentage),2)
+    ),
+    
+    paste0(
+      round(mean(Cancer$perception_score),2),
+      " ± ",
+      round(sd(Cancer$perception_score),2)
+    ),
+    
+    paste0(
+      round(mean(Cancer$perception_percentage),2),
+      " ± ",
+      round(sd(Cancer$perception_percentage),2)
+    )
+    
+    
+  )
+)
+
+
+# TABLE 5B
+
+# Score Categories
+
+
+knowledge_dist <- Cancer %>%
+  count(knowledge_level) %>%
+  mutate(
+    Percent = round(
+      100*n/sum(n),
+      1
+    )
+  )
+
+perception_dist <- Cancer %>%
+  count(perception_level) %>%
+  mutate(
+    Percent = round(
+      100*n/sum(n),
+      1
+    )
+  )
+
+doc <- body_add_par(
+  doc,
+  "Table 5. Knowledge and Perception Score Distribution",
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  doc,
+  flextable(table5a)
+)
+
+doc <- body_add_par(
+  doc,
+  "",
+  style = "Normal"
+)
+
+doc <- body_add_flextable(
+  doc,
+  flextable(knowledge_dist)
+)
+
+doc <- body_add_par(
+  doc,
+  "",
+  style = "Normal"
+)
+
+doc <- body_add_flextable(
+  doc,
+  flextable(perception_dist)
+)
+
+
+# EXPORT WORD
+
+
+print(
+  doc,
+  target =
+    "output/KAP_Cancer_Tables.docx"
+)
+
+cat(
+  "\nKAP_Cancer_Tables.docx successfully created.\n"
+)
+
+
+table(Cancer$knowledge_level)
+
+prop.table(
+  table(Cancer$knowledge_level)
+) * 100
+
+
+prop.table(
+  table(Cancer$perception_level)
+) * 100
+
+
+# TABLE 6
+# EXPLORATORY ASSOCIATIONS WITH KNOWLEDGE SCORE
+
+library(dplyr)
+
+# Empty table
+
+table6 <- data.frame()
+
+# FUNCTION FOR BINARY VARIABLES (t-test)
+
+analyse_binary <- function(var){
+  
+  # t-test
+  
+  test <- t.test(
+    Cancer$knowledge_score ~ Cancer[[var]]
+  )
+  
+  stat <- round(
+    as.numeric(test$statistic),
+    3
+  )
+  
+  pval <- signif(
+    test$p.value,
+    3
+  )
+  
+  # descriptive statistics
+  
+  tmp <- Cancer %>%
+    
+    group_by(.data[[var]]) %>%
+    
+    summarise(
+      
+      n = n(),
+      
+      Mean = mean(
+        knowledge_score,
+        na.rm = TRUE
+      ),
+      
+      SD = sd(
+        knowledge_score,
+        na.rm = TRUE
+      ),
+      
+      .groups = "drop"
+    )
+  
+  names(tmp)[1] <- "Category"
+  
+  tmp <- tmp %>%
+    
+    mutate(
+      
+      Variable = var,
+      
+      Mean_Knowledge_Score =
+        paste0(
+          
+          round(Mean,2),
+          
+          " (",
+          
+          round(SD,2),
+          
+          ")"
+        ),
+      
+      Test =
+        "Student t-test",
+      
+      Statistic =
+        c(
+          stat,
+          rep(
+            "",
+            n()-1
+          )
+        ),
+      
+      P_value =
+        c(
+          pval,
+          rep(
+            "",
+            n()-1
+          )
+        )
+    ) %>%
+    
+    select(
+      
+      Variable,
+      
+      Category,
+      
+      n,
+      
+      Mean_Knowledge_Score,
+      
+      Test,
+      
+      Statistic,
+      
+      P_value
+    )
+  
+  return(tmp)
+}
+
+# SEX
+
+table6 <- rbind(
+  
+  table6,
+  
+  analyse_binary("sexe")
+)
+
+# MARITAL STATUS
+
+table6 <- rbind(
+  
+  table6,
+  
+  analyse_binary(
+    "statut_matrimonial"
+  )
+)
+
+# PERSONAL HISTORY OF CANCER
+
+table6 <- rbind(
+  
+  table6,
+  
+  analyse_binary(
+    "antecedent_personnel_de_cancer"
+  )
+)
+
+# FAMILY HISTORY OF CANCER
+
+table6 <- rbind(
+  
+  table6,
+  
+  analyse_binary(
+    "antecedent_familial_de_cancer"
+  )
+)
+
+# PROVINCE (ANOVA)
+
+anova_province <- aov(
+  
+  knowledge_score ~ province,
+  
+  data = Cancer
+)
+
+F_value <- round(
+  
+  summary(
+    anova_province
+  )[[1]][["F value"]][1],
+  
+  3
+)
+
+p_value <- signif(
+  
+  summary(
+    anova_province
+  )[[1]][["Pr(>F)"]][1],
+  
+  3
+)
+
+tmp <- Cancer %>%
+  
+  group_by(
+    province
+  ) %>%
+  
+  summarise(
+    
+    n = n(),
+    
+    Mean =
+      mean(
+        knowledge_score
+      ),
+    
+    SD =
+      sd(
+        knowledge_score
+      ),
+    
+    .groups = "drop"
+  )
+
+tmp <- tmp %>%
+  
+  mutate(
+    
+    Variable =
+      "province",
+    
+    Category =
+      province,
+    
+    Mean_Knowledge_Score =
+      paste0(
+        
+        round(
+          Mean,
+          2
+        ),
+        
+        " (",
+        
+        round(
+          SD,
+          2
+        ),
+        
+        ")"
+      ),
+    
+    Test =
+      "ANOVA",
+    
+    Statistic =
+      c(
+        F_value,
+        rep(
+          "",
+          n()-1
+        )
+      ),
+    
+    P_value =
+      c(
+        p_value,
+        rep(
+          "",
+          n()-1
+        )
+      )
+  ) %>%
+  
+  select(
+    
+    Variable,
+    
+    Category,
+    
+    n,
+    
+    Mean_Knowledge_Score,
+    
+    Test,
+    
+    Statistic,
+    
+    P_value
+  )
+
+table6 <- rbind(
+  table6,
+  tmp
+)
+
+# QUANTITATIVE VARIABLES
+# Spearman correlation
+
+analyse_spearman <- function(
+    variable,
+    label
+){
+  
+  test <- cor.test(
+    
+    Cancer$knowledge_score,
+    
+    Cancer[[variable]],
+    
+    method = "spearman",
+    
+    exact = FALSE
+  )
+  
+  data.frame(
+    
+    Variable =
+      label,
+    
+    Category =
+      "Spearman rho",
+    
+    n =
+      nrow(Cancer),
+    
+    Mean_Knowledge_Score =
+      "-",
+    
+    Test =
+      "Spearman",
+    
+    Statistic =
+      round(
+        test$estimate,
+        3
+      ),
+    
+    P_value =
+      signif(
+        test$p.value,
+        3
+      )
+  )
+}
+
+table6 <- rbind(
+  
+  table6,
+  
+  analyse_spearman(
+    "age",
+    "age"
+  ),
+  
+  analyse_spearman(
+    "duree_stage",
+    "duree_stage"
+  ),
+  
+  analyse_spearman(
+    "perception_score",
+    "perception_score"
+  )
+)
+
+# DISPLAY TABLE
+
+table6
+
+# EXPORT WORD
+
+library(flextable)
+library(officer)
+
+doc <- read_docx()
+
+doc <- body_add_par(
+  
+  doc,
+  
+  "Table 6. Exploratory Associations with Cancer Knowledge Score",
+  
+  style = "heading 1"
+)
+
+doc <- body_add_flextable(
+  
+  doc,
+  
+  flextable(table6)
+)
+
+print(
+  
+  doc,
+  
+  target =
+    "output/Table_6_Exploratory_Associations.docx"
+)
+
+
+# REGRESSION LINEAIRE
+
+library(dplyr)
+library(ggplot2)
+library(car)
+library(flextable)
+library(officer)
+
+
+
+# FIGURE 1
+# Distribution of Cancer Knowledge Score
+
+
+
+# Summary statistics
+
+mean_score <- round(
+  mean(Cancer$knowledge_score),
+  1
+)
+
+sd_score <- round(
+  sd(Cancer$knowledge_score),
+  1
+)
+
+median_score <- round(
+  median(Cancer$knowledge_score),
+  1
+)
+
+q1 <- round(
+  quantile(
+    Cancer$knowledge_score,
+    0.25
+  ),
+  1
+)
+
+q3 <- round(
+  quantile(
+    Cancer$knowledge_score,
+    0.75
+  ),
+  1
+)
+
+# Figure
+
+fig1 <- ggplot(
+  Cancer,
+  aes(x = knowledge_score)
+) +
+  
+  geom_histogram(
+    
+    aes(
+      y = after_stat(count / sum(count) * 100)
+    ),
+    
+    bins = 20,
+    
+    fill = "grey70",
+    
+    color = "black",
+    
+    linewidth = 0.4
+  ) +
+  
+  geom_vline(
+    
+    xintercept = mean_score,
+    
+    linetype = "dashed",
+    
+    linewidth = 1
+  ) +
+  
+  annotate(
+    
+    "text",
+    
+    x = min(Cancer$knowledge_score) + 2,
+    
+    y = 16,
+    
+    hjust = 0,
+    
+    size = 4.5,
+    
+    label = paste0(
+      "Mean = ", mean_score,
+      "\nSD = ", sd_score,
+      "\nMedian = ", median_score,
+      "\nIQR = ", q1, "–", q3
+    )
+  ) +
+  
+  labs(
+    
+    title = "Distribution of Cancer Knowledge Score",
+    
+    x = "Knowledge Score",
+    
+    y = "Percentage of Participants (%)"
+  ) +
+  
+  theme_classic(base_size = 15) +
+  
+  theme(
+    
+    plot.title = element_text(
+      face = "bold",
+      hjust = 0.5
+    ),
+    
+    axis.title = element_text(
+      face = "bold"
+    )
+  )
+
+ggsave(
+  "output/model_analysis/Figure_1_Knowledge_Score.png",
+  fig1,
+  width = 8,
+  height = 6,
+  dpi = 600
+)
+
+
+# FIGURE 2
+# KNOWLEDGE VS PERCEPTION
+
+
+
+# Association Between Perception and Knowledge Scores
+
+
+# Linear model
+
+lm_fig <- lm(
+  knowledge_score ~ perception_score,
+  data = Cancer
+)
+
+coef_lm <- coef(lm_fig)
+
+intercept <- round(coef_lm[1], 2)
+
+slope <- round(coef_lm[2], 2)
+
+r2 <- round(
+  summary(lm_fig)$r.squared,
+  3
+)
+
+pval <- signif(
+  summary(lm_fig)$coefficients[
+    "perception_score",
+    "Pr(>|t|)"
+  ],
+  3
+)
+
+equation_text <- paste0(
+  "Knowledge score = ",
+  intercept,
+  " + ",
+  slope,
+  " × Perception score",
+  "\nR² = ",
+  r2,
+  "\np = ",
+  pval
+)
+
+# Figure
+
+fig2 <- ggplot(
+  
+  Cancer,
+  
+  aes(
+    x = perception_score,
+    y = knowledge_score
+  )
+  
+) +
+  
+  geom_jitter(
+    
+    width = 0.12,
+    
+    height = 0,
+    
+    alpha = 0.6,
+    
+    size = 2
+  ) +
+  
+  geom_smooth(
+    
+    method = "lm",
+    
+    se = TRUE,
+    
+    linewidth = 1.2
+  ) +
+  
+  annotate(
+    
+    "text",
+    
+    x = 0.3,
+    
+    y = max(
+      Cancer$knowledge_score
+    ),
+    
+    hjust = 0,
+    
+    vjust = 1,
+    
+    size = 5,
+    
+    label = equation_text
+  ) +
+  
+  labs(
+    
+    title =
+      "Association Between Perception and Knowledge Scores",
+    
+    x =
+      "Perception Score",
+    
+    y =
+      "Knowledge Score"
+  ) +
+  
+  theme_classic(
+    base_size = 15
+  ) +
+  
+  theme(
+    
+    plot.title =
+      element_text(
+        face = "bold",
+        hjust = 0.5
+      ),
+    
+    axis.title =
+      element_text(
+        face = "bold"
+      )
+  )
+
+# Export
+
+ggsave(
+  
+  "output/model_analysis/Figure_2_Perception_vs_Knowledge.png",
+  
+  fig2,
+  
+  width = 8,
+  
+  height = 6,
+  
+  dpi = 600
+)
+
+
+
+
+# MULTIVARIABLE ANALYSIS
+
+
+# OUTPUT DIRECTORY
+
+dir.create(
+  "output/model_analysis",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+
+# MODEL
+
+model_lm <- lm(
+  
+  knowledge_score ~
+    
+    age +
+    sexe +
+    province +
+    statut_matrimonial +
+    duree_stage +
+    antecedent_personnel_de_cancer +
+    antecedent_familial_de_cancer +
+    perception_score,
+  
+  data = Cancer
+)
+
+# NORMALITY TEST
+
+shapiro_res <- shapiro.test(
+  residuals(model_lm)
+)
+
+table_shapiro <- data.frame(
+  
+  Test =
+    "Shapiro-Wilk",
+  
+  Statistic =
+    round(
+      shapiro_res$statistic,
+      4
+    ),
+  
+  P_value =
+    signif(
+      shapiro_res$p.value,
+      3
+    )
+)
+
+# FIGURE 3
+# QQ PLOT
+
+png(
+  
+  "output/model_analysis/Figure_3_QQPlot.png",
+  
+  width = 2400,
+  height = 1800,
+  res = 300
+)
+
+qqnorm(
+  residuals(model_lm)
+)
+
+qqline(
+  residuals(model_lm)
+)
+
+dev.off()
+
+# FIGURE 4
+# DIAGNOSTICS
+
+png(
+  
+  "output/model_analysis/Figure_4_Diagnostics.png",
+  
+  width = 3000,
+  height = 2500,
+  res = 300
+)
+
+par(
+  mfrow = c(2,2)
+)
+
+plot(
+  model_lm
+)
+
+dev.off()
+
+
+
+# VIF TABLE
+
+vif_values <- car::vif(model_lm)
+
+table_vif <- data.frame(
+  Variable = rownames(vif_values),
+  GVIF = round(vif_values[,1], 3),
+  Df = vif_values[,2],
+  GVIF_Adjusted = round(vif_values[,3], 3)
+)
+
+table_vif
+
+
+
+# TABLE 7. MULTIPLE LINEAR REGRESSION
+# METRIQUES DE VALIDATION DU MODEL DE RLM
+ 
+
+
+library(Metrics)
+
+coef_lm <- summary(model_lm)$coefficients
+ci_lm   <- confint(model_lm)
+
+table_lm <- data.frame(
+  
+  Variable = rownames(coef_lm),
+  
+  Beta = round(coef_lm[,1], 3),
+  
+  SE = round(coef_lm[,2], 3),
+  
+  CI95 = paste0(
+    round(ci_lm[,1], 2),
+    " ; ",
+    round(ci_lm[,2], 2)
+  ),
+  
+  P_value = signif(coef_lm[,4], 3),
+  
+  stringsAsFactors = FALSE
+)
+
+#=========================================================
+# Model performance
+#=========================================================
+
+pred <- predict(model_lm)
+
+R2     <- summary(model_lm)$r.squared
+Adj_R2 <- summary(model_lm)$adj.r.squared
+RMSE   <- rmse(Cancer$knowledge_score, pred)
+MAE    <- mae(Cancer$knowledge_score, pred)
+
+table_lm <- rbind(
+  table_lm,
+  data.frame(
+    Variable = "Model performance",
+    Beta = NA,
+    SE = NA,
+    CI95 = paste0(
+      "R² = ", round(R2,3),
+      "; Adj. R² = ", round(Adj_R2,3),
+      "; RMSE = ", round(RMSE,2),
+      "; MAE = ", round(MAE,2)
+    ),
+    P_value = NA
+  )
+)
+
+table_lm
+
+
+
+
+
+# QUASI-BINOMIAL
+
+model_qb <- glm(
+  
+  cbind(
+    knowledge_score,
+    74 - knowledge_score
+  ) ~
+    
+    age +
+    sexe +
+    province +
+    statut_matrimonial +
+    duree_stage +
+    antecedent_personnel_de_cancer +
+    antecedent_familial_de_cancer +
+    perception_score,
+  
+  family =
+    quasibinomial,
+  
+  data =
+    Cancer
+)
+
+coef_qb <- summary(
+  model_qb
+)$coefficients
+
+table_qb <- data.frame(
+  
+  Variable =
+    rownames(
+      coef_qb
+    ),
+  
+  Beta =
+    round(
+      coef_qb[,1],
+      3
+    ),
+  
+  SE =
+    round(
+      coef_qb[,2],
+      3
+    ),
+  
+  P_value =
+    signif(
+      coef_qb[,4],
+      3
+    )
+)
+
+
+
+# WORD REPORT
+
+doc <- read_docx()
+
+doc <- body_add_par(
+  
+  doc,
+  
+  "Multivariable Analysis",
+  
+  style = "heading 1"
+)
+
+doc <- body_add_par(
+  
+  doc,
+  
+  "Table S1. Shapiro-Wilk Test",
+  
+  style = "heading 2"
+)
+
+doc <- body_add_flextable(
+  
+  doc,
+  
+  flextable(
+    table_shapiro
+  )
+)
+
+doc <- body_add_par(
+  
+  doc,
+  
+  "Table S2. Variance Inflation Factors",
+  
+  style = "heading 2"
+)
+
+doc <- body_add_flextable(
+  
+  doc,
+  
+  flextable(
+    table_vif
+  )
+)
+
+doc <- body_add_par(
+  
+  doc,
+  
+  "Table 7. Multiple Linear Regression",
+  
+  style = "heading 2"
+)
+
+doc <- body_add_flextable(
+  
+  doc,
+  
+  flextable(
+    table_lm
+  )
+)
+
+doc <- body_add_par(
+  
+  doc,
+  
+  "Table S3. Quasi-binomial Regression",
+  
+  style = "heading 2"
+)
+
+doc <- body_add_flextable(
+  
+  doc,
+  
+  flextable(
+    table_qb
+  )
+)
+
+print(
+  
+  doc,
+  
+  target =
+    "output/model_analysis/KAP_Cancer_Model_Analysis.docx"
+)
+
+# END
