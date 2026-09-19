@@ -15,7 +15,7 @@ Cancer_raw <- read.csv2(
   fileEncoding = "latin1" # Empêche la corruption des caractères accentués
 ) %>% 
   clean_names()
-
+names(Cancer_raw)
 # ------------------------------------------------------------------------------
 # 2. Recodage sécurisé de TOUTES les variables clés
 # ------------------------------------------------------------------------------
@@ -311,6 +311,7 @@ Cancer_raw <- read.csv2(
   fileEncoding = "latin1"
 ) %>% clean_names()
 
+names(Cancer_raw)
 Cancer <- Cancer_raw
 
 # 2. Chargement du Codebook
@@ -784,6 +785,39 @@ cat("\n--- Distribution Perception (%) ---\n")
 print(round(prop.table(table(Cancer$perception_level)) * 100, 1))
 
 
+#===========================================================================
+# GRAPHIQUE DE DISTRIBUTION DES SCORES DE CONNAISSANCES 
+#===========================================================================
+
+library(ggplot2)
+
+
+m <- mean(Cancer$knowledge_score, na.rm=T)
+s <- sd(Cancer$knowledge_score, na.rm=T)
+md <- median(Cancer$knowledge_score, na.rm=T)
+iqr <- IQR(Cancer$knowledge_score, na.rm=T)
+
+ggplot(Cancer, aes(knowledge_score)) +
+  geom_histogram(aes(y=after_stat(count/sum(count)*100)),
+                 binwidth=2.5, fill="grey70", color="black") +
+  geom_vline(xintercept=m, color="red", linetype="dashed", linewidth=.8) +
+  annotate("text", x=23, y=16, hjust=0, vjust=1,
+           label=paste0("Mean = ",round(m,1),
+                        "\nSD = ",round(s,1),
+                        "\nMedian = ",md,
+                        "\nIQR = ",iqr), size=4) +
+  labs(x="Knowledge Score", y="Percentage of Participants (%)") +
+  theme_classic()
+
+# Exporter la figure en PNG haute résolution
+ggsave(
+  "output/Figure_2_Knowledge_Score_Distribution.png",
+  width = 8,
+  height = 6,
+  dpi = 600,
+  bg = "white"
+)
+
 #============================================================================
 # TABLE 6 : EXPLORATORY ASSOCIATIONS (KNOWLEDGE SCORE)
 #============================================================================
@@ -938,37 +972,6 @@ res_shapiro <- shapiro.test(residuals(lm_fig))
 message("P-value normalité des résidus : ", round(res_shapiro$p.value, 4))
 
 
-# ------------------------------------------------------------------------------
-# 3. FIGURE 2 : Association Perception vs Connaissances
-# ------------------------------------------------------------------------------
-
-# Extraction et formatage des paramètres
-b0 <- round(coef(lm_fig)[1], 2)
-b1 <- round(coef(lm_fig)[2], 2)
-r2 <- round(summary_lm$r.squared, 3)
-p_val <- summary_lm$coefficients["perception_score", "Pr(>|t|)"]
-p_text <- ifelse(p_val < 0.001, "p < 0.001", sprintf("p = %.3f", p_val))
-
-eq_label <- sprintf("Score Connaissances = %.2f + %.2f × Perception\nR² = %.3f | %s", b0, b1, r2, p_text)
-
-fig2 <- ggplot(Cancer, aes(x = perception_score, y = knowledge_score)) +
-  geom_jitter(width = 0.15, height = 0, alpha = 0.5, size = 2) +
-  geom_smooth(method = "lm", se = TRUE, color = "blue", linewidth = 1) +
-  annotate(
-    "text", x = -Inf, y = Inf, label = eq_label,
-    hjust = -0.05, vjust = 1.2, size = 4.2, fontface = "italic"
-  ) +
-  labs(
-    title = "Association entre Perception et Connaissances",
-    x = "Score de perception",
-    y = "Score de connaissances"
-  ) +
-  theme_classic(base_size = 13) +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5))
-
-ggsave("output/model_analysis/Figure_2_Perception_vs_Knowledge.png", fig2, width = 7, height = 5, dpi = 300)
-
-
 
 # ==============================================================================
 # ANALYSIS MULTIVARIÉE : MODÈLE POUR VARIABLE DE COMPTAGE (KNOWLEDGE_SCORE)
@@ -983,6 +986,8 @@ library(ggplot2)     # Graphiques
 library(DHARMa)      # Diagnostics par résidus simulés
 library(gtsummary)   # Tableaux de régression
 library(flextable)   # Exportation Word (.docx)
+library(glmmTMB)     # Modèles mixtes (si nécessaire pour l'effet aléatoire)
+library(broom.mixed) # tidy() pour modèles mixtes
 
 # Création du dossier de sortie
 dir.create("output/model_analysis", showWarnings = FALSE, recursive = TRUE)
@@ -1000,96 +1005,185 @@ model_poisson <- glm(
   data = Cancer
 )
 
+# Multicolinéarité (GVIF ajusté pour variables multinomiales comme province)
+vif <- car::vif(model_poisson)
+print(vif)
+
+
 # Test de surdispersion pour valider la Poisson
 check_overdispersion(model_poisson)
 
-# Modèle B: Régression Binomiale Négative (Modèle Retenu)
-model_final <- glm.nb(
+# Modèle B: Régression Binomiale Négative 
+model_nb <- glm.nb(
   knowledge_score ~ age + sexe + province + statut_matrimonial +
     duree_stage + antecedent_personnel_de_cancer +
     antecedent_familial_de_cancer + perception_score,
   data = Cancer
 )
 
-# Test de surdispersion du modèle final
-check_overdispersion(model_final)
-
-# ------------------------------------------------------------------------------
-# 3. Diagnostic & Colinéarité
-# ------------------------------------------------------------------------------
-
-# Multicolinéarité (GVIF ajusté pour variables multinomiales comme province)
-vif_final <- car::vif(model_final)
-print(vif_final)
+# Test de surdispersion du modèle NB
+check_overdispersion(model_nb)
 
 # Performance globale du modèle
-perf <- performance(model_final)
+perf <- performance(model_nb)
 print(perf)
 
-# ------------------------------------------------------------------------------
-# 4. Diagnostics des Résidus Simulés (DHARMa)
-# ------------------------------------------------------------------------------
+# Tests formels des résidus simulés (DHARMa)
 
-simulation_res <- simulateResiduals(fittedModel = model_final, n = 1000)
+simulation_res <- simulateResiduals(fittedModel = model_nb, n = 1000)
 
-# Tests formels
 testUniformity(simulation_res) # Test d'uniformité (Kolmogorov-Smirnov)
 testDispersion(simulation_res) # Test de dispersion résiduelle
 testOutliers(simulation_res)   # Test des valeurs aberrantes
 
-# Exportation sécurisée de la figure DHARMa sans l'erreur de lissage
-png(
-  "output/model_analysis/Figure_DHARMa_Diagnostics.png",
-  width = 10, height = 5, units = "in", res = 300
+
+
+# Modèle C: Régression Binomiale Négative  Mixte 
+# University comme effet aléatoire
+
+Cancer$university <- as.factor(Cancer$university)
+
+model_bn_mixte <- glmmTMB(
+  knowledge_score ~ age + sexe + province + statut_matrimonial +
+    duree_stage + antecedent_personnel_de_cancer +
+    antecedent_familial_de_cancer + perception_score + (1 | university),
+  family = nbinom2,
+  data = Cancer
 )
 
-# Option smooth = FALSE désactive le spline problématique tout en gardant tous les résidus et tests visuels
-plot(simulation_res, smooth = FALSE)
+tidy(
+  model_bn_mixte,
+  effects = "fixed",
+  component = "cond",
+  exponentiate = TRUE,
+  conf.int = TRUE
+)
 
-dev.off()
+# Test de surdispersion du modèle final
+check_overdispersion(model_bn_mixte)
+
+# Convergence et singularité du modèle mixte
+
+check_convergence(model_bn_mixte)
+check_singularity(model_bn_mixte)
+VarCorr(model_bn_mixte)
+
+# Performance globale du modèle
+perf <- performance(model_bn_mixte)
+print(perf)
+
+# Tests formels des résidus simulés (DHARMa)
+
+simulation_res <- simulateResiduals(fittedModel = model_bn_mixte, n = 1000)
+
+testUniformity(simulation_res) # Test d'uniformité (Kolmogorov-Smirnov)
+testDispersion(simulation_res) # Test de dispersion résiduelle
+testOutliers(simulation_res)   # Test des valeurs aberrantes
+
+
+
+# Modèle betabinomial
+
+
+model_bb_mixte <- glmmTMB(
+  cbind(knowledge_score, 74 - knowledge_score) ~
+    age + sexe + province + statut_matrimonial +
+    duree_stage + antecedent_personnel_de_cancer +
+    antecedent_familial_de_cancer + perception_score +
+    (1 | university),
+  family = betabinomial(link = "logit"),
+  data = Cancer
+)
+
+tidy(
+  model_bb_mixte,
+  effects = "fixed",
+  component = "cond",
+  exponentiate = TRUE,
+  conf.int = TRUE
+)
+
+
+# Convergence, singularité et surdispersion du modèle betabinomial
+
+check_convergence(model_bb_mixte)
+check_overdispersion(model_bb_mixte)
+check_singularity(model_bb_mixte)
+
+# Diagnostic des résidus simulés pour le modèle betabinomial
+
+
+res_bb_mixt <- simulateResiduals(model_bb_mixte, n = 1000)
+testUniformity(res_bb_mixt)
+testDispersion(res_bb_mixt)
+testOutliers(res_bb_mixt)
+
+AIC(model_poisson, model_nb, model_bn_mixte, model_bb_mixte) 
+
+
 # ------------------------------------------------------------------------------
-# 5. Génération du Tableau de Publication (Style JAMA - English)
+# 5. Génération du Tableau de Publication
+#    Modèle bêta-binomiale mixte - Style JAMA
 # ------------------------------------------------------------------------------
 
 # Configuration du thème gtsummary
 theme_gtsummary_journal(journal = "jama")
 theme_gtsummary_language(language = "en")
 
-table_publication <- model_final %>%
-  tbl_regression(
-    exponentiate = TRUE, # Conversion des coefficients en IRR
-    pvalue_fun   = ~ style_pvalue(.x, digits = 3),
-    label        = list(
-      age                            ~ "Age (years)",
-      sexe                           ~ "Sex",
-      province                       ~ "Province of origin",
-      statut_matrimonial             ~ "Marital status",
-      duree_stage                    ~ "Internship duration",
-      antecedent_personnel_de_cancer ~ "Personal history of cancer",
-      antecedent_familial_de_cancer  ~ "Family history of cancer",
-      perception_score               ~ "Perception score"
+
+table_publication <- suppressMessages(
+  model_bb_mixte %>%
+    tbl_regression(
+      exponentiate = TRUE,
+      pvalue_fun = ~ style_pvalue(.x, digits = 3),
+      label = list(
+        age                            ~ "Age (years)",
+        sexe                           ~ "Sex",
+        province                       ~ "Province of origin",
+        statut_matrimonial             ~ "Marital status",
+        duree_stage                    ~ "Internship duration (months)",
+        antecedent_personnel_de_cancer ~ "Personal history of cancer",
+        antecedent_familial_de_cancer  ~ "Family history of cancer",
+        perception_score               ~ "Perception score"
+      )
+    ) %>%
+    
+    # Mise en évidence des p-values significatives
+    bold_p(t = 0.05) %>%
+    
+    # Mise en évidence des variables
+    bold_labels() %>%
+    
+    # En-têtes du tableau
+    modify_header(
+      label    ~ "**Predictors**",
+      estimate ~ "**Adjusted OR (95% CI)**",
+      p.value  ~ "**p-value**"
+    ) %>%
+    
+    # Informations générales du modèle
+    add_glance_source_note(
+      label = list(
+        nobs ~ "Observations",
+        AIC  ~ "Akaike Information Criterion (AIC)"
+      ),
+      include = c(nobs, AIC)
+    ) %>%
+    
+    # Note méthodologique
+    modify_footnote(
+      estimate ~ paste0(
+        "Adjusted OR: adjusted odds ratio; ",
+        "CI: confidence interval. ",
+        "Estimates are from a beta-binomial mixed-effects ",
+        "regression model with university as a random intercept."
+      )
     )
-  ) %>%
-  bold_p(t = 0.05) %>%
-  bold_labels() %>%
-  modify_header(
-    label    ~ "**Predictors**",
-    estimate ~ "**IRR (95% CI)**",
-    p.value  ~ "**p-value**"
-  ) %>%
-  add_glance_source_note(
-    label = list(
-      nobs ~ "Observations",
-      AIC  ~ "Akaike Information Criterion (AIC)"
-    ),
-    include = c(nobs, AIC)
-  ) %>%
-  modify_footnote(
-    all_stat_cols() ~ "IRR: Incidence Rate Ratio; CI: Confidence Interval. Model Diagnostics: Residual uniformity verified via DHARMa simulated quantile residuals; Overdispersion test passed; Multicollinearity absent (adjusted GVIF < 1.40)."
-  )
+)
 
 # Affichage console
 table_publication
+
 
 # ------------------------------------------------------------------------------
 # 6. Exportation vers Microsoft Word
@@ -1098,5 +1192,5 @@ table_publication
 table_publication %>%
   as_flex_table() %>%
   flextable::save_as_docx(
-    path = "output/model_analysis/Table_Negative_Binomial_Model.docx"
+    path = "output/model_analysis/Table_Beta_Binomial_Mixed_Model.docx"
   )
