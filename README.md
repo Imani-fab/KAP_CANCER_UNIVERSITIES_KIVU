@@ -6,11 +6,13 @@ Background: Cancer imposes a growing burden in sub-Saharan Africa, with mortalit
 
 This study aimed to assess knowledge, perceptions, and experiences regarding cancer among final-year medical interns in North Kivu, South Kivu, and Maniema, and to identify factors associated with knowledge levels.
 
-Methods: This multi-institutional cross-sectional survey was conducted from 1 March to 31 May 2026. An expert-reviewed and pilot-tested questionnaire (74 knowledge items, score 0-74; 5 perception items, score 0–5) was completed online or face-to-face by medical interns across seven institutions. Multivariable negative binomial regression identified independent predictors of knowledge scores.
+Methods: A multi-institutional cross-sectional survey was conducted from 1 March to 31 May 2026. An expert-reviewed and pilot-tested questionnaire comprising 74 knowledge items (score range, 0–74) and 5 perception items (score range, 0 - 5) was administered online or face-to-face across seven institutions. A beta-binomial mixed-effects model with university as a random intercept assessed factors associated with knowledge performance.
 
-Results: Of 260 participants (mean age 26 ± 2 years; 63% male), the mean knowledge score was 45.2 ± 9.3 (≈61%). Only 1.2% achieved good knowledge (≥85% correct); 52.7% had insufficient or poor knowledge. Domain performance was highest for cancer definition (78.1%) and lowest for palliative care (21.9%), awareness/information sources (43.2%), and risk factors (57.9%). Perceptions were predominantly positive (82.3%), yet only 24.2% ranked cancer control as a top national priority. Higher perception score was the main predictor of knowledge (IRR = 1.07, 95%CI: 1.05-1.09, p < 0.001). Originating from outside the DRC was associated with higher knowledge (IRR = 1.21, 95%CI: 1.05-1.39, p = 0.008).
+Results: Among 260 participants (mean age, 26 ± 2 years; 63% male), the mean knowledge score was 46.2 ± 9.3 (≈62%). Only 1.2% achieved good knowledge, while 52.7% had insufficient or poor knowledge. Performance was highest for cancer definition (78.1%) and lowest for the single palliative-care item (21.9%), awareness and information sources (43.2%), and risk factors (57.9%). Perceptions were predominantly favorable (82.3%), although only 24.2% ranked cancer control as a top national priority. Higher perception scores were associated with higher odds of correct responses (aOR, 1.19; 95% CI, 1.12–1.26; P < .001). Originating from outside the DRC was associated with higher odds of correct responses (aOR, 1.69; 95% CI, 1.13–2.55; P = .012), although this association was exploratory (n=10).
 
-Conclusions: Final-year interns in eastern DRC demonstrate moderate overall knowledge with critical gaps in prevention, risk factors, and especially palliative care, despite largely favorable perceptions. Structured undergraduate oncology education, including context-adapted palliative-care content, is urgently needed to strengthen the future frontline workforce in this fragile setting.
+Conclusions: Final-year medical interns showed moderate cancer knowledge, with important gaps in prevention, risk factors, and the single palliative-care item despite predominantly favorable perceptions. Strengthening undergraduate oncology education is warranted.
 
-Keywords: Medical education; Cancer knowledge, Democratic Republic of the Congo
+Keywords: Medical education; Cancer knowledge, conflict-affected setting, Democratic Republic of the Congo
+
+
 
